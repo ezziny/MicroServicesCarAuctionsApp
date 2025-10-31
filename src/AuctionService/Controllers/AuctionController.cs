@@ -52,13 +52,9 @@ public class AuctionsController: BaseController
         // TODO: add current user as seller when you've implemented identity
         auction.Seller = "test";
         await _context.Auctions.AddAsync(auction);
-
         var publishAuction = _mapper.Map<AuctionDto>(auction);
-
         await _publishEndpoint.Publish(_mapper.Map<AuctionCreated>(publishAuction));
-        
-        var result = await _context.SaveChangesAsync() > 0;
-
+        var result = await _context.SaveChangesAsync() > 0; //it's fine to leave the SaveChangesAsync after the publish because it won't publish anyways if you don't save changes as we have outbox remember?
         if (!result) return BadRequest(new {error = "Couldn't Save Changes To The Database"});
         return CreatedAtAction(nameof(GetAuctionById), new {auction.Id}, publishAuction);
     }
@@ -77,6 +73,7 @@ public class AuctionsController: BaseController
         auction.Item.Year = updateData.Year ?? auction.Item.Year;
         auction.Item.Color = updateData.Color ?? auction.Item.Color;
         auction.Item.Mileage = updateData.Mileage ?? auction.Item.Mileage;
+        await _publishEndpoint.Publish(_mapper.Map<AuctionUpdated>(auction));
         var result = await _context.SaveChangesAsync() > 0;
         if (!result) return BadRequest(new {error = "Couldn't Save Changes To The Database"});
         return Ok();
@@ -88,9 +85,10 @@ public class AuctionsController: BaseController
         var auction = await _context.Auctions.FindAsync(id);
         if (auction == null) return NotFound();
         _context.Auctions.Remove(auction);
+        await _publishEndpoint.Publish(new AuctionDeleted { Id = id.ToString() });
         var result = await _context.SaveChangesAsync() > 0;
         if (!result) return BadRequest(new {error = "Couldn't Delete Auction From The Database"});
-        return NoContent();
+        return Ok();
     }
 
 }
