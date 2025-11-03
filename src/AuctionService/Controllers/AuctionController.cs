@@ -5,6 +5,7 @@ using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Contracts;
 using MassTransit;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -44,20 +45,21 @@ public class AuctionsController: BaseController
         if (auction == null) return NotFound();
         return _mapper.Map<AuctionDto>(auction);
     }
-
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult<AuctionDto>> CreateAuction(CreateAuctionDto creationData)
     {
         var auction = _mapper.Map<Auction>(creationData);
         // TODO: add current user as seller when you've implemented identity
-        auction.Seller = "test";
+        auction.Seller = User.Identity.Name;
         await _context.Auctions.AddAsync(auction);
         var publishAuction = _mapper.Map<AuctionDto>(auction);
         await _publishEndpoint.Publish(_mapper.Map<AuctionCreated>(publishAuction));
         var result = await _context.SaveChangesAsync() > 0; //it's fine to leave the SaveChangesAsync after the publish because it won't publish anyways if you don't save changes as we have outbox remember?
-        if (!result) return BadRequest(new {error = "Couldn't Save Changes To The Database"});
-        return CreatedAtAction(nameof(GetAuctionById), new {auction.Id}, publishAuction);
+        if (!result) return BadRequest(new { error = "Couldn't Save Changes To The Database" });
+        return CreatedAtAction(nameof(GetAuctionById), new { auction.Id }, publishAuction);
     }
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateAuction(Guid id, UpdateAuctionDto updateData)
     {
@@ -66,7 +68,7 @@ public class AuctionsController: BaseController
             .FirstOrDefaultAsync(x => x.Id == id);
         if (auction == null) return NotFound();
         // TODO : check if current user is the seller when you've implemented identity 
-        // return Unauthorized();
+        if (auction.Seller != User.Identity.Name) return Forbid();
         // no need for mapping 
         auction.Item.Make = updateData.Make ?? auction.Item.Make;
         auction.Item.Model = updateData.Model ?? auction.Item.Model;
@@ -75,15 +77,17 @@ public class AuctionsController: BaseController
         auction.Item.Mileage = updateData.Mileage ?? auction.Item.Mileage;
         await _publishEndpoint.Publish(_mapper.Map<AuctionUpdated>(auction));
         var result = await _context.SaveChangesAsync() > 0;
-        if (!result) return BadRequest(new {error = "Couldn't Save Changes To The Database"});
+        if (!result) return BadRequest(new { error = "Couldn't Save Changes To The Database" });
         return Ok();
     }
     //usuallly you don't delete auctions but for the sake of the example i will implement it lmao
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteAuction(Guid id)
     {
         var auction = await _context.Auctions.FindAsync(id);
         if (auction == null) return NotFound();
+        if (auction.Seller != User.Identity.Name) return Forbid();
         _context.Auctions.Remove(auction);
         await _publishEndpoint.Publish(new AuctionDeleted { Id = id.ToString() });
         var result = await _context.SaveChangesAsync() > 0;
