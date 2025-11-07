@@ -26,8 +26,20 @@ public static class Config
                 ClientName = "Insomnia",
                 AllowedScopes = {"openid", "profile", "auctionApp"},
                 RedirectUris = {"https://chatgpt.com"},
-                ClientSecrets = new [] {new Secret("someSecretjey7783y".Sha256())},
+                ClientSecrets = new [] {new Secret("someSecretjey7783y".Sha256())}, //TODO : switch to .env when things are serious
                 AllowedGrantTypes = {GrantType.ResourceOwnerPassword},
+            },
+            new Client
+            {
+                ClientId = "nextApplication",
+                ClientName = "nextApplication",
+                ClientSecrets = {new Secret("nextSecret".Sha256())}, //TODO : switch to .env when things are serious
+                AllowedGrantTypes = GrantTypes.CodeAndClientCredentials,
+                RequirePkce = false,
+                RedirectUris = {"http://localhost:3000/api/auth/callback/id-server" }, //??
+                AllowOfflineAccess = true,
+                AllowedScopes = {"openid","profile","auctionApp"},
+                AccessTokenLifetime = 3600*24*30
             }
         };
 }

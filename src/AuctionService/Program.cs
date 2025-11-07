@@ -1,3 +1,4 @@
+using AuctionService.Consumers;
 using AuctionService.Contexts;
 using AuctionService.Extensions;
 using AuctionService.Helpers;
@@ -18,6 +19,8 @@ builder.Services.AddDbContext<AuctionDbContext>(options =>
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddMassTransit(x =>
 {
+    x.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter("auction", false));
+    x.AddConsumersFromNamespaceContaining<AuctionFinishedConsumer>();
     x.AddEntityFrameworkOutbox<AuctionDbContext>(o =>
     {
         o.QueryDelay = TimeSpan.FromSeconds(15);

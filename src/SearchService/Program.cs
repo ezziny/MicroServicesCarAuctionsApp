@@ -1,7 +1,8 @@
 using System.Net;
 using MassTransit;
 using MongoDB.Driver;
-using MongoDB.Entities;using Polly;
+using MongoDB.Entities;
+using Polly;
 using Polly.Extensions.Http;
 using SearchService.Entities;
 using SearchService.Extensions;
