@@ -6,8 +6,12 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - type: volume
-        target: /var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   mongo:
     image: mongo
@@ -17,8 +21,21 @@ services:
     ports:
       - 27017:27017
     volumes:
-      - type: volume
-        target: /data/db
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "127.0.0.1/test",
+          "--eval",
+          "'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   rabbitmq:
     image: rabbitmq:4.1.4-management-alpine
@@ -29,5 +46,79 @@ services:
       RABBITMQ_DEFAULT_USER: rabbit
       RABBITMQ_DEFAULT_PASS: rabbit
     volumes:
-      - type: volume
-        target: /var/lib/rabbitmq
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_port_connectivity || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auctionservice:
+    image: ezziny/auctionservice:latest
+    build:
+      context: .
+      dockerfile: ./src/AuctionService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - RabbitMq__Host=rabbitmq
+      - ConnectionStrings__AuctionDatabase=Server=postgres:5432;User Id=postgres;Password=postgres;Database=auctions
+      - IdentityServiceUrl=http://identityservice
+    ports:
+      - 7001:80
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  searchservice:
+    image: ezziny/searchservice:latest
+    build:
+      context: .
+      dockerfile: ./src/SearchService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - RabbitMq__Host=rabbitmq
+      - ConnectionStrings__MongoDb=mongodb://mongo:mongo@mongo
+      - IdentityServiceUrl=http://identityservice
+      - AuctionServiceUrl=http://auctionservice
+    ports:
+      - 7002:80
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  identityservice:
+    image: ezziny/identityservice:latest
+    build:
+      context: .
+      dockerfile: ./src/IdentityService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=postgres:5432;User Id=postgres;Password=postgres;Database=IdentityDb
+    ports:
+      - 5001:80
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gatewayservice:
+    image: ezziny/gatewayservice:latest
+    build:
+      context: .
+      dockerfile: ./src/GatewayService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+      - ASPNETCORE_URLS=http://+:80
+    ports:
+      - 5279:80
+
+volumes:
+  postgres_data:
+  mongo_data:
+  rabbitmq_data:
