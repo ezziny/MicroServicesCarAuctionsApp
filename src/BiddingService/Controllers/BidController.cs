@@ -1,6 +1,7 @@
 using AutoMapper;
 using BiddingService.Dtos;
 using BiddingService.Models;
+using BiddingService.Services;
 using Contracts;
 using MassTransit;
 using MassTransit.Transports;
@@ -13,11 +14,15 @@ public class BidController : BaseController
 {
     private readonly IMapper _mapper;
     private readonly IPublishEndpoint _publishEndpoint;
+    private readonly GrpcAuctionClient _grpcAuctionClient;
 
-    public BidController(IMapper mapper, IPublishEndpoint publishEndpoint)
+    public BidController(IMapper mapper,
+     IPublishEndpoint publishEndpoint,
+     GrpcAuctionClient grpcAuctionClient)
     {
         _mapper = mapper;
         _publishEndpoint = publishEndpoint;
+        _grpcAuctionClient = grpcAuctionClient;
     }
     [Authorize]
     [HttpPost]
@@ -25,8 +30,11 @@ public class BidController : BaseController
     {
         var auction = await DB.Find<Auction>().OneAsync(auctionId);
         if (auction == null)
-        // TODO : check if AuctionService is reachable and fetch auction details if not found in local DB
-            return NotFound("Auction not found.");
+        {
+            auction = _grpcAuctionClient.GetAuction(id: auctionId);
+            if (auction == null)
+                return BadRequest("no bidding currently allowed on this auction");
+        }
         if (auction.Seller == User.Identity.Name)
             return BadRequest("You cannot Bid on your own Auction");
         var bid = new Bid
