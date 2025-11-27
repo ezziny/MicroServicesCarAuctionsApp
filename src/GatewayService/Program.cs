@@ -12,9 +12,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 builder.Services.AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
-
+builder.Services.AddCors(o =>
+{
+    o.AddPolicy("customPolicy", p =>
+    {
+        p.AllowAnyHeader().AllowAnyMethod().AllowCredentials().WithOrigins(builder.Configuration["nextApplication"]);
+    });
+});
 var app = builder.Build();
-
+app.UseCors();
 app.MapReverseProxy();
 app.UseAuthentication();
 app.UseAuthorization();
